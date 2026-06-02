@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 40 10% 92%;
+  --foreground: 220 8% 13%;
+  --card: 36 10% 96%;
+  --card-foreground: 220 8% 13%;
+  --primary: 220 8% 13%;
+  --primary-foreground: 40 10% 96%;
+  --secondary: 40 7% 88%;
+  --secondary-foreground: 220 8% 13%;
+  --muted: 38 8% 89%;
+  --muted-foreground: 225 5% 39%;
+  --accent: 220 6% 36%;
+  --accent-foreground: 40 10% 96%;
+  --border: 220 8% 22%;
+  --input: 220 7% 70%;
+  --ring: 220 8% 22%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Hanken Grotesk", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+body::before {
+  background-image:
+    radial-gradient(rgba(24, 24, 27, 0.045) 1px, transparent 1px),
+    radial-gradient(rgba(24, 24, 27, 0.03) 1px, transparent 1px);
+  background-position: 0 0, 1px 2px;
+  background-size: 3px 3px, 8px 8px;
+  content: "";
+  inset: 0;
+  opacity: 0.55;
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: rgba(82, 82, 91, 0.18);
+}
+
+.display-serif {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.mono-label {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
