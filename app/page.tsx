@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, BarChart3, FileText, Gauge, LinkIcon, Loader2, Search, Sparkles } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
-import { analyzeArticle } from "@/lib/analyzers";
 import type { ArticleAnalysis, HighlightKind } from "@/lib/analyzers/types";
 import { sampleArticles } from "@/lib/samples";
 import { cn } from "@/lib/utils";
@@ -14,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 type ExtractState = "idle" | "loading" | "error";
+type AnalysisState = "idle" | "loading" | "error";
 
 const highlightStyles: Record<HighlightKind, string> = {
   panic: "bg-zinc-300 text-zinc-950 ring-zinc-500",
@@ -32,9 +32,52 @@ export default function Home() {
   const [body, setBody] = useState(sampleArticles[0].body);
   const [url, setUrl] = useState("");
   const [extractState, setExtractState] = useState<ExtractState>("idle");
+  const [analysisState, setAnalysisState] = useState<AnalysisState>("idle");
+  const [analysis, setAnalysis] = useState<ArticleAnalysis | null>(null);
   const [error, setError] = useState("");
 
-  const analysis = useMemo<ArticleAnalysis>(() => analyzeArticle({ headline, body }), [headline, body]);
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function runAnalysis() {
+      if (!body.trim()) {
+        setAnalysis(null);
+        return;
+      }
+
+      setAnalysisState("loading");
+      setError("");
+
+      try {
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ headline, body }),
+          signal: controller.signal
+        });
+        const payload = (await response.json()) as ArticleAnalysis | { error?: string };
+
+        if (!response.ok) {
+          throw new Error("error" in payload ? payload.error : "Could not analyze article.");
+        }
+
+        setAnalysis(payload as ArticleAnalysis);
+        setAnalysisState("idle");
+      } catch (caught) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setAnalysisState("error");
+        setError(caught instanceof Error ? caught.message : "Could not analyze article.");
+      }
+    }
+
+    const timeout = window.setTimeout(runAnalysis, 450);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [headline, body]);
 
   async function extractUrl() {
     setExtractState("loading");
@@ -115,6 +158,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
+          {analysis ? (
           <section className="grid gap-6 sm:grid-cols-2">
             <MetricCard
               icon={<Activity className="size-4" />}
@@ -131,6 +175,7 @@ export default function Home() {
               label={analysis.objectivity.label}
               explanation={analysis.objectivity.explanation}
             />
+            <BiasCard analysis={analysis} />
             <MetricCard
               icon={<Sparkles className="size-4" />}
               title="Loaded Language"
@@ -140,14 +185,61 @@ export default function Home() {
             />
             <PanicCard analysis={analysis} />
           </section>
+          ) : (
+            <LoadingPanel state={analysisState} />
+          )}
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-          <HighlightedArticle headline={headline} body={body} analysis={analysis} />
-          <Insights analysis={analysis} />
+          {analysis ? (
+            <>
+              <HighlightedArticle headline={headline} body={body} analysis={analysis} />
+              <Insights analysis={analysis} />
+            </>
+          ) : (
+            <Card className="lg:col-span-2">
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  {analysisState === "error" ? "Analysis failed. Check that Ollama is running locally with llama3.1:8b available." : "Waiting for Ollama analysis..."}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </section>
       </div>
     </main>
+  );
+}
+
+function LoadingPanel({ state }: { state: AnalysisState }) {
+  return (
+    <Card className="sm:col-span-2">
+      <CardContent className="flex min-h-64 items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto mb-3 size-5 animate-spin text-muted-foreground" />
+          <p className="mono-label text-[11px] text-muted-foreground">
+            {state === "error" ? "Ollama analysis unavailable" : "Analyzing locally with Ollama"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BiasCard({ analysis }: { analysis: ArticleAnalysis }) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle className="flex items-center gap-2"><BarChart3 className="size-4" />Bias Leaning</CardTitle>
+        <Badge>{analysis.mediaAnalysis.bias_leaning}</Badge>
+      </CardHeader>
+      <CardContent>
+        <div className="display-serif py-6 text-center text-4xl font-normal text-foreground">
+          {analysis.mediaAnalysis.bias_leaning}
+        </div>
+        <p className="text-sm leading-6 text-muted-foreground">{analysis.mediaAnalysis.justification}</p>
+      </CardContent>
+    </Card>
   );
 }
 

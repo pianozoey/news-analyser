@@ -1,17 +1,7 @@
 import type { SentimentResult } from "./types";
 
-type VaderModule = {
-  SentimentIntensityAnalyzer: {
-    polarity_scores: (text: string) => { compound: number };
-  };
-};
-
-// vader-sentiment is a compact open-source implementation of VADER.
-// The compound score is normalized from -1..1 into the requested -100..100 range.
-export function analyzeSentiment(text: string): SentimentResult {
-  const vader = require("vader-sentiment") as VaderModule;
-  const compound = vader.SentimentIntensityAnalyzer.polarity_scores(text).compound;
-  const score = Math.round(compound * 100);
+export function sentimentFromScore(sentimentScore: number): SentimentResult {
+  const score = Math.round(sentimentScore * 100);
   const label =
     score <= -55
       ? "Negative"
@@ -26,6 +16,6 @@ export function analyzeSentiment(text: string): SentimentResult {
   return {
     score,
     label,
-    explanation: `VADER produced a compound sentiment of ${compound.toFixed(3)}, normalized to ${score}.`
+    explanation: `Ollama returned a structured sentiment score of ${sentimentScore.toFixed(2)}, normalized to ${score}.`
   };
 }

@@ -7,6 +7,13 @@ export type SentimentResult = MetricResult & {
   label: "Negative" | "Slightly Negative" | "Neutral" | "Slightly Positive" | "Positive";
 };
 
+export type MediaAnalysisResult = {
+  sentiment: "positive" | "negative" | "neutral";
+  sentiment_score: number;
+  bias_leaning: "Left" | "Center-Left" | "Center" | "Center-Right" | "Right";
+  justification: string;
+};
+
 export type ObjectivityResult = MetricResult & {
   label: "Highly Objective" | "Mostly Objective" | "Mixed" | "Opinion-Heavy" | "Highly Subjective";
   evidenceCount: number;
@@ -41,6 +48,7 @@ export type InsightResult = {
 };
 
 export type ArticleAnalysis = {
+  mediaAnalysis: MediaAnalysisResult;
   sentiment: SentimentResult;
   objectivity: ObjectivityResult;
   loadedLanguage: LoadedLanguageResult;
