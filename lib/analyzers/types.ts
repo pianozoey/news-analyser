@@ -7,11 +7,21 @@ export type SentimentResult = MetricResult & {
   label: "Negative" | "Slightly Negative" | "Neutral" | "Slightly Positive" | "Positive";
 };
 
+export type LanguageExtractions = {
+  factualPhrases: string[];
+  attributionVerbs: string[];
+  loadedWords: string[];
+  opinionIndicators: string[];
+  subjectiveWords: string[];
+  fearWords: string[];
+  catastropheWords: string[];
+  urgencyIndicators: string[];
+};
+
 export type MediaAnalysisResult = {
-  sentiment: "positive" | "negative" | "neutral";
-  sentiment_score: number;
   bias_leaning: "Left" | "Center-Left" | "Center" | "Center-Right" | "Right";
   justification: string;
+  extractions: LanguageExtractions;
 };
 
 export type ObjectivityResult = MetricResult & {

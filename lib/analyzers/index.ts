@@ -1,9 +1,9 @@
 import { analyzeInsights, getHighlights } from "./insights";
 import { analyzeLoadedLanguage } from "./loadedLanguage";
-import { analyzeObjectivity } from "./objectivity";
 import { analyzeNewsWithOllama } from "./ollamaMediaAnalysis";
+import { analyzeObjectivity } from "./objectivity";
 import { analyzePanic } from "./panicMeter";
-import { sentimentFromScore } from "./sentiment";
+import { analyzeSentiment } from "./sentiment";
 import type { ArticleAnalysis } from "./types";
 
 export async function analyzeArticle(input: { headline?: string; body: string }): Promise<ArticleAnalysis> {
@@ -11,12 +11,13 @@ export async function analyzeArticle(input: { headline?: string; body: string })
   const body = input.body.trim();
   const fullText = [headline, body].filter(Boolean).join("\n\n");
   const mediaAnalysis = await analyzeNewsWithOllama(fullText);
-  const sentiment = sentimentFromScore(mediaAnalysis.sentiment_score);
-  const objectivity = analyzeObjectivity(body);
-  const loadedLanguage = analyzeLoadedLanguage(fullText);
-  const panic = analyzePanic(fullText);
-  const bodyPanic = analyzePanic(body);
-  const headlinePanic = analyzePanic(headline || (body.split(/\n|\. /)[0] ?? ""));
+  const { extractions } = mediaAnalysis;
+  const sentiment = analyzeSentiment(fullText, extractions);
+  const objectivity = analyzeObjectivity(body, extractions);
+  const loadedLanguage = analyzeLoadedLanguage(fullText, extractions.loadedWords);
+  const panic = analyzePanic(fullText, extractions);
+  const bodyPanic = analyzePanic(body, extractions);
+  const headlinePanic = analyzePanic(headline || (body.split(/\n|\. /)[0] ?? ""), extractions);
 
   return {
     mediaAnalysis,
@@ -26,7 +27,7 @@ export async function analyzeArticle(input: { headline?: string; body: string })
     panic,
     bodyPanic,
     headlinePanic,
-    insights: analyzeInsights(fullText, { sentiment, objectivity, loadedLanguage, panic }),
-    highlights: getHighlights()
+    insights: analyzeInsights(fullText, extractions, { sentiment, objectivity, loadedLanguage, panic }),
+    highlights: getHighlights(extractions)
   };
 }

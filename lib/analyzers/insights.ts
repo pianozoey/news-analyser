@@ -1,8 +1,6 @@
-import { factualPhrases } from "@/lib/dictionaries/factualPhrases";
-import { loadedWords } from "@/lib/dictionaries/loadedWords";
-import { catastropheWords, fearWords } from "@/lib/dictionaries/panicWords";
 import { countMatches, tokenize } from "@/lib/utils";
-import type { ArticleAnalysis, HighlightMatch, InsightResult } from "./types";
+import { termFrequencies } from "./loadedLanguage";
+import type { ArticleAnalysis, HighlightMatch, InsightResult, LanguageExtractions } from "./types";
 
 const stopWords = new Set([
   "about",
@@ -29,16 +27,22 @@ const stopWords = new Set([
   "with"
 ]);
 
-export function getHighlights(): HighlightMatch[] {
+export function getHighlights(extractions: LanguageExtractions): HighlightMatch[] {
   return [
-    ...fearWords.map((phrase) => ({ phrase, kind: "panic" as const })),
-    ...catastropheWords.map((phrase) => ({ phrase, kind: "panic" as const })),
-    ...loadedWords.map((phrase) => ({ phrase, kind: "loaded" as const })),
-    ...factualPhrases.map((phrase) => ({ phrase, kind: "evidence" as const }))
+    ...extractions.fearWords.map((phrase) => ({ phrase, kind: "panic" as const })),
+    ...extractions.catastropheWords.map((phrase) => ({ phrase, kind: "panic" as const })),
+    ...extractions.urgencyIndicators.map((phrase) => ({ phrase, kind: "panic" as const })),
+    ...extractions.loadedWords.map((phrase) => ({ phrase, kind: "loaded" as const })),
+    ...extractions.factualPhrases.map((phrase) => ({ phrase, kind: "evidence" as const })),
+    ...extractions.attributionVerbs.map((phrase) => ({ phrase, kind: "evidence" as const }))
   ];
 }
 
-export function analyzeInsights(text: string, partial: Pick<ArticleAnalysis, "sentiment" | "objectivity" | "loadedLanguage" | "panic">): InsightResult {
+export function analyzeInsights(
+  text: string,
+  extractions: LanguageExtractions,
+  partial: Pick<ArticleAnalysis, "sentiment" | "objectivity" | "loadedLanguage" | "panic">
+): InsightResult {
   const words = tokenize(text);
   const wordCounts = new Map<string, number>();
 
@@ -53,13 +57,12 @@ export function analyzeInsights(text: string, partial: Pick<ArticleAnalysis, "se
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  const emotionalWords = Array.from(wordCounts.entries())
-    .filter(([term]) => loadedWords.includes(term) || fearWords.includes(term) || catastropheWords.includes(term))
-    .map(([term, count]) => ({ term, count }))
-    .sort((a, b) => b.count - a.count)
+  const emotionalTerms = [...extractions.loadedWords, ...extractions.fearWords, ...extractions.catastropheWords];
+  const emotionalWords = termFrequencies(text, emotionalTerms)
+    .map(({ word, count }) => ({ term: word, count }))
     .slice(0, 10);
 
-  const topFactualPhrases = factualPhrases
+  const topFactualPhrases = extractions.factualPhrases
     .map((term) => ({ term, count: countMatches(text, [term]) }))
     .filter((item) => item.count > 0)
     .sort((a, b) => b.count - a.count)

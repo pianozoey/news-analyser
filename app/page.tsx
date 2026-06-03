@@ -139,7 +139,7 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+        <section>
           <Card>
             <CardHeader>
               <CardTitle>01 / Article Input</CardTitle>
@@ -154,58 +154,48 @@ export default function Home() {
               </div>
               {error ? <p className="rounded-sm border border-zinc-500 bg-zinc-200 px-3 py-2 text-sm text-zinc-900">{error}</p> : null}
               <Input placeholder="Headline" value={headline} onChange={(event) => setHeadline(event.target.value)} />
-              <Textarea placeholder="Paste article text" value={body} onChange={(event) => setBody(event.target.value)} />
+              <Textarea placeholder="Paste article text" value={body} onChange={(event) => setBody(event.target.value)} className="min-h-48" />
             </CardContent>
           </Card>
-
-          {analysis ? (
-          <section className="grid gap-6 sm:grid-cols-2">
-            <MetricCard
-              icon={<Activity className="size-4" />}
-              title="Sentiment"
-              score={analysis.sentiment.score}
-              label={analysis.sentiment.label}
-              explanation={analysis.sentiment.explanation}
-              variant="sentiment"
-            />
-            <MetricCard
-              icon={<BarChart3 className="size-4" />}
-              title="Objectivity"
-              score={analysis.objectivity.score}
-              label={analysis.objectivity.label}
-              explanation={analysis.objectivity.explanation}
-            />
-            <BiasCard analysis={analysis} />
-            <MetricCard
-              icon={<Sparkles className="size-4" />}
-              title="Loaded Language"
-              score={analysis.loadedLanguage.score}
-              label={`${analysis.loadedLanguage.loadedWordCount} terms found`}
-              explanation={analysis.loadedLanguage.explanation}
-            />
-            <PanicCard analysis={analysis} />
-          </section>
-          ) : (
-            <LoadingPanel state={analysisState} />
-          )}
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-          {analysis ? (
-            <>
+        {analysis ? (
+          <>
+            <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <MetricCard
+                icon={<Activity className="size-4" />}
+                title="Sentiment"
+                score={analysis.sentiment.score}
+                label={analysis.sentiment.label}
+                explanation={analysis.sentiment.explanation}
+                variant="sentiment"
+              />
+              <MetricCard
+                icon={<BarChart3 className="size-4" />}
+                title="Objectivity"
+                score={analysis.objectivity.score}
+                label={analysis.objectivity.label}
+                explanation={analysis.objectivity.explanation}
+              />
+              <BiasCard analysis={analysis} />
+              <MetricCard
+                icon={<Sparkles className="size-4" />}
+                title="Loaded Language"
+                score={analysis.loadedLanguage.score}
+                label={`${analysis.loadedLanguage.loadedWordCount} terms found`}
+                explanation={analysis.loadedLanguage.explanation}
+              />
+              <PanicCard analysis={analysis} />
+            </section>
+
+            <section className="flex flex-col gap-6">
               <HighlightedArticle headline={headline} body={body} analysis={analysis} />
               <Insights analysis={analysis} />
-            </>
-          ) : (
-            <Card className="lg:col-span-2">
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {analysisState === "error" ? "Analysis failed. Check that Ollama is running locally with llama3.1:8b available." : "Waiting for Ollama analysis..."}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </section>
+            </section>
+          </>
+        ) : (
+          <LoadingPanel state={analysisState} />
+        )}
       </div>
     </main>
   );
@@ -213,12 +203,12 @@ export default function Home() {
 
 function LoadingPanel({ state }: { state: AnalysisState }) {
   return (
-    <Card className="sm:col-span-2">
-      <CardContent className="flex min-h-64 items-center justify-center">
+    <Card>
+      <CardContent className="flex min-h-48 items-center justify-center py-12">
         <div className="text-center">
           <Loader2 className="mx-auto mb-3 size-5 animate-spin text-muted-foreground" />
           <p className="mono-label text-[11px] text-muted-foreground">
-            {state === "error" ? "Ollama analysis unavailable" : "Analyzing locally with Ollama"}
+            {state === "error" ? "Analysis unavailable. Ensure the local analysis service is running and try again." : "Analyzing article..."}
           </p>
         </div>
       </CardContent>
@@ -366,7 +356,10 @@ function renderHighlightedText(text: string, analysis: ArticleAnalysis) {
 }
 
 function Insights({ analysis }: { analysis: ArticleAnalysis }) {
-  const loadedData = analysis.loadedLanguage.commonWords.map((item) => ({ name: item.word, value: item.count }));
+  const loadedData = analysis.loadedLanguage.commonWords.map((item) => ({
+    word: item.word,
+    count: item.count
+  }));
 
   return (
     <div className="space-y-6">
@@ -388,16 +381,27 @@ function Insights({ analysis }: { analysis: ArticleAnalysis }) {
           <CardTitle>Loaded Language Frequency</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={loadedData.length ? loadedData : [{ name: "none", value: 0 }]} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#d6d3d1" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#52525b" }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: "#52525b" }} />
-                <Bar dataKey="value" fill="#3f3f46" radius={[2, 2, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {loadedData.length ? (
+            <div className="h-64 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={loadedData} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d6d3d1" vertical={false} />
+                  <XAxis
+                    dataKey="word"
+                    interval={0}
+                    angle={-35}
+                    textAnchor="end"
+                    height={60}
+                    tick={{ fontSize: 11, fill: "#52525b" }}
+                  />
+                  <YAxis allowDecimals={false} width={32} tick={{ fontSize: 12, fill: "#52525b" }} />
+                  <Bar dataKey="count" fill="#3f3f46" radius={[2, 2, 0, 0]} minPointSize={4} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No loaded language detected in this article.</p>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -410,7 +414,9 @@ function InsightList({ title, items }: { title: string; items: string[] }) {
       <h4 className="mono-label mb-2 text-[10px] font-semibold text-muted-foreground">{title}</h4>
       {items.length ? (
         <ol className="space-y-1 text-sm text-muted-foreground">
-          {items.slice(0, 10).map((item) => <li key={item}>{item}</li>)}
+          {items.slice(0, 10).map((item, index) => (
+            <li key={`${title}-${index}`}>{item}</li>
+          ))}
         </ol>
       ) : (
         <p className="text-sm text-muted-foreground">No strong signals found.</p>

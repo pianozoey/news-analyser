@@ -1,27 +1,23 @@
 import "server-only";
 import ollama from "ollama";
+import type { LanguageExtractions, MediaAnalysisResult } from "./types";
 
-export type OllamaMediaAnalysis = {
-  sentiment: "positive" | "negative" | "neutral";
-  sentiment_score: number;
-  bias_leaning: "Left" | "Center-Left" | "Center" | "Center-Right" | "Right";
-  justification: string;
-};
-
-const mediaAnalysisSchema = {
+const extractionSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["sentiment", "sentiment_score", "bias_leaning", "justification"],
+  required: [
+    "bias_leaning",
+    "justification",
+    "factual_phrases",
+    "attribution_verbs",
+    "loaded_words",
+    "opinion_indicators",
+    "subjective_words",
+    "fear_words",
+    "catastrophe_words",
+    "urgency_indicators"
+  ],
   properties: {
-    sentiment: {
-      type: "string",
-      enum: ["positive", "negative", "neutral"]
-    },
-    sentiment_score: {
-      type: "number",
-      minimum: -1,
-      maximum: 1
-    },
     bias_leaning: {
       type: "string",
       enum: ["Left", "Center-Left", "Center", "Center-Right", "Right"]
@@ -30,41 +26,124 @@ const mediaAnalysisSchema = {
       type: "string",
       minLength: 1,
       maxLength: 700
+    },
+    factual_phrases: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
+    },
+    attribution_verbs: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
+    },
+    loaded_words: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
+    },
+    opinion_indicators: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
+    },
+    subjective_words: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
+    },
+    fear_words: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
+    },
+    catastrophe_words: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
+    },
+    urgency_indicators: {
+      type: "array",
+      items: { type: "string", minLength: 1 }
     }
   }
 } as const;
 
-function isOllamaMediaAnalysis(value: unknown): value is OllamaMediaAnalysis {
+type RawExtractionResponse = {
+  bias_leaning: MediaAnalysisResult["bias_leaning"];
+  justification: string;
+  factual_phrases: string[];
+  attribution_verbs: string[];
+  loaded_words: string[];
+  opinion_indicators: string[];
+  subjective_words: string[];
+  fear_words: string[];
+  catastrophe_words: string[];
+  urgency_indicators: string[];
+};
+
+function normalizeTerms(terms: string[]) {
+  return [...new Set(terms.map((term) => term.trim().toLowerCase()).filter(Boolean))];
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim().length > 0);
+}
+
+function isRawExtractionResponse(value: unknown): value is RawExtractionResponse {
   if (!value || typeof value !== "object") {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
   return (
-    ["positive", "negative", "neutral"].includes(String(candidate.sentiment)) &&
-    typeof candidate.sentiment_score === "number" &&
-    candidate.sentiment_score >= -1 &&
-    candidate.sentiment_score <= 1 &&
     ["Left", "Center-Left", "Center", "Center-Right", "Right"].includes(String(candidate.bias_leaning)) &&
     typeof candidate.justification === "string" &&
-    candidate.justification.trim().length > 0
+    candidate.justification.trim().length > 0 &&
+    isStringArray(candidate.factual_phrases) &&
+    isStringArray(candidate.attribution_verbs) &&
+    isStringArray(candidate.loaded_words) &&
+    isStringArray(candidate.opinion_indicators) &&
+    isStringArray(candidate.subjective_words) &&
+    isStringArray(candidate.fear_words) &&
+    isStringArray(candidate.catastrophe_words) &&
+    isStringArray(candidate.urgency_indicators)
   );
 }
 
-export async function analyzeNewsWithOllama(articleText: string): Promise<OllamaMediaAnalysis> {
+function toExtractions(raw: RawExtractionResponse): LanguageExtractions {
+  return {
+    factualPhrases: normalizeTerms(raw.factual_phrases),
+    attributionVerbs: normalizeTerms(raw.attribution_verbs),
+    loadedWords: normalizeTerms(raw.loaded_words),
+    opinionIndicators: normalizeTerms(raw.opinion_indicators),
+    subjectiveWords: normalizeTerms(raw.subjective_words),
+    fearWords: normalizeTerms(raw.fear_words),
+    catastropheWords: normalizeTerms(raw.catastrophe_words),
+    urgencyIndicators: normalizeTerms(raw.urgency_indicators)
+  };
+}
+
+export async function analyzeNewsWithOllama(articleText: string): Promise<MediaAnalysisResult> {
   try {
     const response = await ollama.chat({
       model: "llama3.1:8b",
-      format: mediaAnalysisSchema,
+      format: extractionSchema,
       messages: [
         {
           role: "system",
-          content:
-            "You are an objective, elite media analyst. Evaluate the provided news article for sentiment and likely political bias. Be precise, fair, evidence-led, and avoid partisan assumptions. Return only JSON matching the provided schema."
+          content: `You are an objective media analyst. Do NOT score sentiment or objectivity. Your job is to:
+1. Extract language signals that actually appear in the article.
+2. Assess likely political bias leaning with a short justification.
+
+Extract only words or phrases found in the text:
+- factual_phrases: evidence/reporting phrases (e.g. "according to", "data shows", "officials said")
+- attribution_verbs: verbs showing source attribution (e.g. "said", "reported", "confirmed")
+- loaded_words: emotionally charged or editorializing terms (e.g. "outrageous", "shocking", "slammed")
+- opinion_indicators: first-person or editorial opinion markers (e.g. "i think", "clearly", "obviously")
+- subjective_words: value judgments (e.g. "terrible", "amazing", "worst", "perfect")
+- fear_words: anxiety/risk language (e.g. "crisis", "threat", "warning")
+- catastrophe_words: disaster framing (e.g. "disaster", "devastation", "chaos")
+- urgency_indicators: time-pressure language (e.g. "breaking", "immediately", "urgent")
+
+Return exact substrings from the article when possible. Use lowercase for single words. Return empty arrays when none are found.`
         },
         {
           role: "user",
-          content: `Analyze this article:\n\n${articleText}`
+          content: `Extract language signals and assess bias for this article:\n\n${articleText}`
         }
       ],
       options: {
@@ -73,17 +152,17 @@ export async function analyzeNewsWithOllama(articleText: string): Promise<Ollama
     });
 
     const parsed = JSON.parse(response.message.content) as unknown;
-    if (!isOllamaMediaAnalysis(parsed)) {
-      throw new Error("Ollama returned JSON that did not match the expected media analysis schema.");
+    if (!isRawExtractionResponse(parsed)) {
+      throw new Error("Model returned JSON that did not match the expected extraction schema.");
     }
 
     return {
-      ...parsed,
-      sentiment_score: Math.max(-1, Math.min(1, parsed.sentiment_score)),
-      justification: parsed.justification.trim()
+      bias_leaning: parsed.bias_leaning,
+      justification: parsed.justification.trim(),
+      extractions: toExtractions(parsed)
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown Ollama analysis failure.";
-    throw new Error(`Failed to analyze article with Ollama: ${message}`);
+    const message = error instanceof Error ? error.message : "Unknown analysis failure.";
+    throw new Error(`Failed to analyze article: ${message}`);
   }
 }
