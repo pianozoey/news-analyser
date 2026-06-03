@@ -20,16 +20,6 @@ Highlights, insights, and charts are built from the extracted terms.
 | **`llama3.1:8b` model** pulled in Ollama | Article analysis |
 | **Playwright Chromium** | URL extraction (optional) |
 
-### Will it work without Ollama?
-
-**Partially.**
-
-- The site will load and you can paste article text or use sample articles.
-- **Analysis will fail** without a running Ollama instance on `http://localhost:11434` with the `llama3.1:8b` model available. You will see “Analysis unavailable” in the UI.
-- **URL extraction** does not use Ollama. It uses Playwright (with a plain `fetch` fallback), so it can work independently as long as Playwright browsers are installed.
-
-Everything runs locally. Article text is sent to your local Ollama server, not a third-party API.
-
 ## Setup
 
 ### 1. Install dependencies
