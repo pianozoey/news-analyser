@@ -1,6 +1,8 @@
 import "server-only";
-import ollama from "ollama";
 import type { LanguageExtractions, MediaAnalysisResult } from "./types";
+
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
 const extractionSchema = {
   type: "object",
@@ -62,6 +64,24 @@ const extractionSchema = {
   }
 } as const;
 
+const SYSTEM_PROMPT = `You are an objective media analyst. Do NOT score sentiment or objectivity. Your job is to:
+1. Extract language signals that actually appear in the article.
+2. Assess likely political bias leaning with a short justification.
+
+Extract only words or phrases found in the text:
+- factual_phrases: evidence/reporting phrases (e.g. "according to", "data shows", "officials said")
+- attribution_verbs: verbs showing source attribution (e.g. "said", "reported", "confirmed")
+- loaded_words: emotionally charged or editorializing terms (e.g. "outrageous", "shocking", "slammed")
+- opinion_indicators: first-person or editorial opinion markers (e.g. "i think", "clearly", "obviously")
+- subjective_words: value judgments (e.g. "terrible", "amazing", "worst", "perfect")
+- fear_words: anxiety/risk language (e.g. "crisis", "threat", "warning")
+- catastrophe_words: disaster framing (e.g. "disaster", "devastation", "chaos")
+- urgency_indicators: time-pressure language (e.g. "breaking", "immediately", "urgent")
+
+Return exact substrings from the article when possible. Use lowercase for single words. Return empty arrays when none are found.
+
+Respond with valid JSON only matching this schema. No markdown fences or extra text.`;
+
 type RawExtractionResponse = {
   bias_leaning: MediaAnalysisResult["bias_leaning"];
   justification: string;
@@ -117,41 +137,66 @@ function toExtractions(raw: RawExtractionResponse): LanguageExtractions {
   };
 }
 
-export async function analyzeNewsWithOllama(articleText: string): Promise<MediaAnalysisResult> {
+function extractJsonContent(content: string): unknown {
+  const trimmed = content.trim();
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch?.[1]?.trim() ?? trimmed;
+  return JSON.parse(candidate);
+}
+
+export async function analyzeNewsWithLLM(articleText: string): Promise<MediaAnalysisResult> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY is not configured.");
+  }
+
+  const model = process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
+
   try {
-    const response = await ollama.chat({
-      model: "llama3.1:8b",
-      format: extractionSchema,
-      messages: [
-        {
-          role: "system",
-          content: `You are an objective media analyst. Do NOT score sentiment or objectivity. Your job is to:
-1. Extract language signals that actually appear in the article.
-2. Assess likely political bias leaning with a short justification.
-
-Extract only words or phrases found in the text:
-- factual_phrases: evidence/reporting phrases (e.g. "according to", "data shows", "officials said")
-- attribution_verbs: verbs showing source attribution (e.g. "said", "reported", "confirmed")
-- loaded_words: emotionally charged or editorializing terms (e.g. "outrageous", "shocking", "slammed")
-- opinion_indicators: first-person or editorial opinion markers (e.g. "i think", "clearly", "obviously")
-- subjective_words: value judgments (e.g. "terrible", "amazing", "worst", "perfect")
-- fear_words: anxiety/risk language (e.g. "crisis", "threat", "warning")
-- catastrophe_words: disaster framing (e.g. "disaster", "devastation", "chaos")
-- urgency_indicators: time-pressure language (e.g. "breaking", "immediately", "urgent")
-
-Return exact substrings from the article when possible. Use lowercase for single words. Return empty arrays when none are found.`
+    const response = await fetch(OPENROUTER_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.OPENROUTER_SITE_URL ?? "http://localhost:3000",
+        "X-Title": process.env.OPENROUTER_APP_NAME ?? "NewsScope"
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "news_language_extraction",
+            strict: true,
+            schema: extractionSchema
+          }
         },
-        {
-          role: "user",
-          content: `Extract language signals and assess bias for this article:\n\n${articleText}`
-        }
-      ],
-      options: {
-        temperature: 0
-      }
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `Extract language signals and assess bias for this article:\n\n${articleText}`
+          }
+        ]
+      })
     });
 
-    const parsed = JSON.parse(response.message.content) as unknown;
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`OpenRouter request failed (${response.status}): ${errorBody}`);
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content?.trim()) {
+      throw new Error("Model returned an empty response.");
+    }
+
+    const parsed = extractJsonContent(content);
     if (!isRawExtractionResponse(parsed)) {
       throw new Error("Model returned JSON that did not match the expected extraction schema.");
     }

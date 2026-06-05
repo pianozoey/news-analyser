@@ -16,8 +16,7 @@ Highlights, insights, and charts are built from the extracted terms.
 | Requirement | Needed for |
 |---|---|
 | **Node.js 18+** | Running the app |
-| **Ollama** (installed and running) | Article analysis |
-| **`llama3.1:8b` model** pulled in Ollama | Article analysis |
+| **OpenRouter API Key** | Article analysis (defaults to `google/gemma-4-31b-it:free`) |
 | **Playwright Chromium** | URL extraction (optional) |
 
 ## Setup
@@ -26,24 +25,26 @@ Highlights, insights, and charts are built from the extracted terms.
 
 ```bash
 npm install
+
+
+
+
+
+
+
+
+
+
 ```
 
-### 2. Install and start Ollama
+### 2. Configure Environment Variables
 
-Install from [ollama.com](https://ollama.com), then pull the model and start the server:
+Create a `.env.local` file in the root directory (copied from `.env.example` or created manually) and add your OpenRouter credentials:
 
-```bash
-ollama pull llama3.1:8b
-ollama serve
+```env
+OPENROUTER_API_KEY=your_api_key_here
+OPENROUTER_MODEL=google/gemma-4-31b-it:free
 ```
-
-Verify Ollama is running:
-
-```bash
-ollama list
-```
-
-You should see `llama3.1:8b` in the list.
 
 ### 3. Install Playwright browsers (for URL extraction)
 
@@ -95,18 +96,14 @@ lib/
 
 **Analysis unavailable**
 
-- Confirm Ollama is running: `curl http://localhost:11434/api/tags`
-- Confirm the model is installed: `ollama pull llama3.1:8b`
-- Restart the Next.js dev server after starting Ollama
+- Confirm `OPENROUTER_API_KEY` is configured in your `.env.local` file or host environment variables.
+- Ensure the selected model is supported by your OpenRouter account/API key.
+- Restart the Next.js dev server after updating environment variables.
 
 **URL extraction fails**
 
 - Run `npx playwright install chromium`
-- Some sites block scraping; try pasting the article text manually
-
-**Slow first analysis**
-
-- The first request may be slow while Ollama loads the model into memory. Later requests are faster.
+- Some sites block scraping; try pasting the article text manually.
 
 ## License
 

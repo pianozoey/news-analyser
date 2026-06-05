@@ -1,6 +1,6 @@
 import { analyzeInsights, getHighlights } from "./insights";
 import { analyzeLoadedLanguage } from "./loadedLanguage";
-import { analyzeNewsWithOllama } from "./ollamaMediaAnalysis";
+import { analyzeNewsWithLLM } from "./mediaAnalysis";
 import { analyzeObjectivity } from "./objectivity";
 import { analyzePanic } from "./panicMeter";
 import { analyzeSentiment } from "./sentiment";
@@ -10,7 +10,7 @@ export async function analyzeArticle(input: { headline?: string; body: string })
   const headline = input.headline?.trim() ?? "";
   const body = input.body.trim();
   const fullText = [headline, body].filter(Boolean).join("\n\n");
-  const mediaAnalysis = await analyzeNewsWithOllama(fullText);
+  const mediaAnalysis = await analyzeNewsWithLLM(fullText);
   const { extractions } = mediaAnalysis;
   const sentiment = analyzeSentiment(fullText, extractions);
   const objectivity = analyzeObjectivity(body, extractions);
